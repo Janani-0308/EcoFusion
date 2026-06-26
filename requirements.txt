@@ -3,3 +3,5 @@ streamlit-autorefresh
 scikit-learn
 requests
 numpy
+timezonefinder
+pytz
