@@ -3,12 +3,17 @@ import numpy as np
 import requests
 from sklearn.linear_model import LinearRegression
 from datetime import datetime
+from pytz import timezone
+from timezonefinder import TimezoneFinder
 from streamlit_autorefresh import st_autorefresh
 
 # Auto-refresh every 5 minutes
 st_autorefresh(interval=300000, limit=None, key="refresh")
 
 st.title("StormShield AI+ Prototype")
+
+# Friendly banner
+st.warning("📍 Please allow location access when prompted so StormShield AI+ can fetch your local weather data and local time accurately.")
 
 # --- STEP 1: Ask browser for location ---
 st.markdown("""
@@ -20,7 +25,7 @@ navigator.geolocation.getCurrentPosition(
         window.location.search = query;
     },
     (err) => {
-        console.error(err);
+        alert("⚠️ Location permission denied. Please allow location access to see accurate weather and time data.");
     }
 );
 </script>
@@ -28,11 +33,13 @@ navigator.geolocation.getCurrentPosition(
 
 # --- STEP 2: Read coordinates from query params ---
 coords = st.query_params
+
 if "lat" in coords and "lon" in coords:
     lat = float(coords["lat"][0])
     lon = float(coords["lon"][0])
 else:
-    lat, lon = 11.442, 77.685  # fallback to Kumarapalayam
+    st.error("⚠️ Location not detected. Please allow location access in your browser.")
+    st.stop()
 
 # --- STEP 3: Fetch weather using lat/lon ---
 api_key = "2479b1cbb4fb62c2a37c448aeb71c63d"  # replace with your OpenWeatherMap key
@@ -46,19 +53,25 @@ if "main" in data and "wind" in data and "clouds" in data:
     city = data["name"]
 else:
     st.error("⚠️ Weather data unavailable — check API key.")
-    temp, wind_speed, cloud_cover = 0, 0, 100
-    city = "Unknown"
+    st.stop()
 
-# --- STEP 4: Display location + weather ---
+# --- STEP 4: Detect timezone from coordinates ---
+tf = TimezoneFinder()
+detected_timezone = tf.timezone_at(lat=lat, lng=lon)
+
+if detected_timezone:
+    local_time = datetime.now(timezone(detected_timezone)).strftime("%Y-%m-%d %H:%M:%S")
+else:
+    local_time = "Unknown"
+
+# --- STEP 5: Display location + weather + local time ---
 st.info(f"📍 Location detected: **{city}**\n🌐 Coordinates: {lat}, {lon}")
 st.write(f"🌤️ Temperature: {temp} °C")
 st.write(f"💨 Wind Speed: {wind_speed} m/s")
 st.write(f"☁️ Cloud Cover: {cloud_cover}%")
+st.markdown(f"**Local time in {city}:** 🕒 {local_time}")
 
-current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-st.markdown(f"**Last updated:** 🕒 {current_time}")
-
-# --- STEP 5: Energy simulation ---
+# --- STEP 6: Energy simulation ---
 hours = np.arange(0, 24)
 solar = np.maximum(0, (100 - cloud_cover)/100 * np.sin((hours - 6)/24 * 2 * np.pi) * 100)
 wind = np.full(24, wind_speed * 10)
@@ -74,7 +87,7 @@ for s, w in zip(solar, wind):
     battery = min(battery_capacity, max(0, battery + net))
     battery_levels.append(battery)
 
-# --- STEP 6: AI forecast ---
+# --- STEP 7: AI forecast ---
 X = hours.reshape(-1, 1)
 y = solar
 model = LinearRegression()
@@ -82,7 +95,7 @@ model.fit(X, y)
 future_hours = np.arange(24, 30).reshape(-1, 1)
 predicted_solar = model.predict(future_hours)
 
-# --- STEP 7: Village redistribution + advice ---
+# --- STEP 8: Village redistribution + advice ---
 village_A = 0.9 * battery_capacity
 village_B = 0.25 * battery_capacity
 
@@ -98,12 +111,12 @@ if village_A > 0.7 * battery_capacity and village_B < 0.4 * battery_capacity:
     village_A -= transfer
     village_B += transfer
 
-# --- STEP 8: Display results ---
+# --- STEP 9: Display results ---
 st.line_chart({"Solar": solar, "Wind": wind, "Battery": battery_levels})
 st.write("🔮 Predicted Solar (next 6 hours):", predicted_solar)
 st.write("🏠 Village A Battery:", village_A)
 st.write("🏠 Village B Battery:", village_B)
 
-# --- STEP 9: Manual refresh button ---
+# --- STEP 10: Manual refresh button ---
 if st.button("🔄 Refresh Weather Data"):
     st.rerun()
