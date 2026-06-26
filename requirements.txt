@@ -1,7 +1,7 @@
 streamlit
-streamlit-autorefresh
-scikit-learn
-requests
-numpy
+streamlit-geolocation
 timezonefinder
 pytz
+requests
+numpy
+scikit-learn
